@@ -2,7 +2,6 @@
 
 Browse popular GitHub repositories by domain (AI, Machine Learning, Cybersecurity, Automobile, Web Dev and more), or search GitHub for any topic or framework.
 
-**Live demo:** https://repo-atlas-seven.vercel.app
 
 Uses the official GitHub Search API. Each domain maps to several GitHub topics; results are merged, de-duplicated and ranked by stars. Includes a language filter, sorting, and CSV export.
 
