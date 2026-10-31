@@ -239,6 +239,11 @@ def search():
 
 
 @app.get("/")
+def landing():
+    return send_from_directory("static", "landing.html")
+
+
+@app.get("/app")
 def index():
     return send_from_directory("static", "index.html")
 
