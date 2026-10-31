@@ -1,36 +1,24 @@
 # Repo Atlas
 
-Browse popular GitHub repositories by domain (AI, Machine Learning, Cybersecurity, Automobile, Web Dev and more), or search GitHub for any topic or framework.
+Repo Atlas helps you discover popular GitHub repositories by field, without digging through GitHub yourself.
 
+## What it does
 
-Uses the official GitHub Search API. Each domain maps to several GitHub topics; results are merged, de-duplicated and ranked by stars. Includes a language filter, sorting, and CSV export.
+- **Browse by domain.** Twelve ready-made categories: AI, Machine Learning, Data Science, Cybersecurity, Automobile, Web Dev, DevOps & Cloud, Blockchain, IoT & Embedded, Robotics, Game Dev and Mobile. Each shows the most-starred repositories in that field.
+- **Search any topic or framework.** Type something like `fastapi` or `langchain` and press Enter to pull matching repositories straight from GitHub.
+- **Filter and sort.** Narrow results by name, description or programming language, and sort by stars, forks or most recent activity.
+- **Export.** Download the filtered list as a CSV file.
+- **Live and reliable data.** Results come from the official GitHub Search API, so they stay accurate when GitHub changes. Recent results are cached for an hour, and if GitHub is temporarily limiting requests, the last saved results are shown instead of an error.
 
-## Run locally
+Each repository card shows its owner, description, language, topics, star and fork counts, and when it was last updated, with a direct link to the repo on GitHub.
 
-```bash
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
-```
+## How results are chosen
 
-Open http://localhost:5000.
-
-Optional: set a `GITHUB_TOKEN` environment variable (no scopes needed) to raise the search rate limit from 10 to 30 requests per minute. Never commit tokens.
-
-## Customize
-
-Edit the `DOMAINS` dictionary at the top of `app.py`:
-
-```python
-"Quantum": (["quantum-computing", "qiskit"], 200),
-```
+Each domain maps to several GitHub topics (for example, Automobile covers `autonomous-driving`, `self-driving-car`, `automotive` and `can-bus`). Repo Atlas fetches the top repositories for each topic, merges them, removes duplicates and ranks them by stars.
 
 ## Known limitations
 
-- **GitHub rate limits.** The app calls the GitHub Search API. Without a `GITHUB_TOKEN` that is about 10 requests per minute (30 with one). A domain tab costs 4 requests and a GitHub search costs 2, so clicking through many tabs quickly shows a "rate limit" error.
-- **The live demo shares one limit.** The Vercel deployment runs without a token, so all visitors share the same limit and may hit rate limits when it is busy. Add a `GITHUB_TOKEN` in the Vercel project settings to raise it.
-- **The cache is temporary on Vercel.** Serverless instances can only write to `/tmp`, so cached results are lost on cold starts. Locally, `cache.json` persists for an hour per entry.
-- **Results depend on GitHub topics.** Repos are found by their topic tags and a minimum star count, so repos without matching topics won't appear, and the match is not always relevant.
-- **Top 100 only.** Each domain or search shows at most the 100 most-starred merged results.
-- **First load is slow.** Each tab fetches live data on first click, which takes a few seconds.
+- **GitHub rate limits.** GitHub allows only a limited number of searches per minute, so clicking through many tabs very quickly can show a "rate limit" message. Saved results are shown when possible.
+- **Results depend on GitHub topics.** Repositories are found by their topic tags and a minimum star count, so repos without matching topics won't appear, and matches aren't always perfectly relevant.
+- **Top 100 only.** Each domain or search shows at most the 100 most-starred results.
+- **Slower first load.** A tab fetches live data the first time you open it, which takes a few seconds.
