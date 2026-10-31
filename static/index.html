@@ -37,7 +37,27 @@ button.act{cursor:pointer}button.act:hover{border-color:var(--accent)}
 .stat b{display:block;color:var(--star);font-size:17px}
 .msg{padding:40px 0;color:var(--mute)}
 .err{color:#b3261e}
-@media(max-width:760px){.app{grid-template-columns:1fr}aside{position:static;height:auto;display:flex;overflow-x:auto;padding:10px}.dom{white-space:nowrap;width:auto}.dom small{display:none}main{padding:16px}.repo{grid-template-columns:32px 1fr}.repo img{width:32px;height:32px}.stat{grid-column:2;text-align:left}.stat b{display:inline;margin-right:8px}}
+main{min-width:0}
+@media(max-width:760px){
+.app{grid-template-columns:minmax(0,1fr)}
+aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:12px 0 8px;overflow:visible}
+h1{font-size:20px;margin:0 16px 8px}
+nav#nav{display:flex;gap:6px;overflow-x:auto;padding:2px 16px 6px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.dom{white-space:nowrap;width:auto;flex:none;min-height:44px;border:1px solid var(--line);border-radius:999px;padding:8px 14px}
+.dom small{display:none}
+main{padding:16px}
+.bar{gap:8px}
+.bar h2{font-size:22px;flex:1 1 100%;margin:0}
+input{min-width:0;flex:1 1 100%;font-size:16px}
+select{flex:1 1 calc(50% - 4px);min-width:0;font-size:16px}
+input,select,button.act{min-height:44px}
+button.act{flex:1 1 auto}
+.repo{grid-template-columns:32px minmax(0,1fr);gap:10px 12px}
+.repo img{width:32px;height:32px}
+.repo p{max-width:none}
+.stat{grid-column:2;text-align:left;white-space:normal}
+.stat b{display:inline;margin-right:8px}
+}
 </style>
 </head>
 <body>

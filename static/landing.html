@@ -65,7 +65,8 @@ h2{font:700 clamp(26px,4vw,36px)/1.15 "Bricolage Grotesque",sans-serif;letter-sp
 .final .btn{background:var(--on-accent);color:var(--accent)}
 footer{border-top:1px solid var(--line);padding:24px 0 40px;color:var(--mute);font-size:14px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between}
 
-@media(max-width:820px){.hero{grid-template-columns:1fr;padding-top:24px}.stage{height:320px}.steps,.perks{grid-template-columns:1fr}}
+@media(max-width:820px){.hero{grid-template-columns:minmax(0,1fr);padding:24px 0 48px;gap:32px}.stage{height:auto;display:grid;gap:12px}.card{position:static;width:100%;animation:none;padding-right:70px}.steps,.perks{grid-template-columns:1fr}section{padding:40px 0}}
+@media(max-width:480px){.wrap{padding:0 16px}h1 em{white-space:normal}.lead{font-size:16px}.cta .btn{flex:1 1 100%;text-align:center}.final{border-radius:18px;padding:36px 16px}.perk{padding:16px}.btn{min-height:44px}}
 @media(prefers-reduced-motion:reduce){.card{animation:none}html{scroll-behavior:auto}}
 </style>
 </head>
