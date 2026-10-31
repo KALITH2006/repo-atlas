@@ -5,12 +5,13 @@ Optional: set GITHUB_TOKEN for 30 req/min instead of 10 req/min.
 """
 import json
 import os
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, g, jsonify, request, send_from_directory
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 
@@ -37,8 +38,56 @@ DOMAINS = {
     "Mobile":          (["android", "ios", "flutter", "react-native"], 1000),
 }
 
+MAX_CACHE_ENTRIES = 200
+SAFE_TERM = re.compile(r"^[\w .+#/-]{2,80}$")  # blocks GitHub qualifiers like user:, repo:, and quotes
+RATE_WINDOW, RATE_MAX, REFRESH_COOLDOWN = 60, 30, 60
+_hits = {}      # ip -> [timestamps] of API calls
+_refreshed = {}  # ip -> last forced-refresh time
 _cache = {}
 _lock = threading.Lock()
+
+
+def client_ip():
+    # Vercel sets X-Forwarded-For; first entry is the real client
+    return (request.headers.get("X-Forwarded-For", request.remote_addr or "") or "").split(",")[0].strip()
+
+
+@app.before_request
+def throttle():
+    """Per-IP limit so one visitor can't burn the shared GitHub quota."""
+    if not request.path.startswith("/api/"):
+        return None
+    now, ip = time.time(), client_ip()
+    hits = [t for t in _hits.get(ip, []) if now - t < RATE_WINDOW]
+    if len(hits) >= RATE_MAX:
+        return jsonify(error="Too many requests. Please slow down."), 429
+    hits.append(now)
+    _hits[ip] = hits
+    if len(_hits) > 5000:  # bound memory
+        _hits.clear()
+    if request.args.get("refresh") == "1":
+        if now - _refreshed.get(ip, 0) < REFRESH_COOLDOWN:
+            g.no_refresh = True  # serve from cache instead of forcing a refresh
+        else:
+            _refreshed[ip] = now
+    return None
+
+
+@app.after_request
+def security_headers(resp):
+    resp.headers["Content-Security-Policy"] = (
+        "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; img-src 'self' https://avatars.githubusercontent.com data:; "
+        "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    )
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    resp.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    if request.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 def _load_cache():
@@ -144,7 +193,7 @@ def domains():
 @app.get("/api/repos")
 def repos():
     domain = request.args.get("domain", "")
-    refresh = request.args.get("refresh") == "1"
+    refresh = request.args.get("refresh") == "1" and not g.get("no_refresh")
     if domain not in DOMAINS:
         return jsonify(error="Unknown domain"), 400
     entry = _cache.get(domain)
@@ -158,7 +207,7 @@ def repos():
             return jsonify(repos=entry["repos"], fetched=entry["ts"], cached=True, stale=True)
         return jsonify(error=str(e)), 429
     except requests.RequestException as e:
-        return jsonify(error=f"GitHub request failed: {e}"), 502
+        return jsonify(error="GitHub request failed. Try again shortly."), 502
     _cache[domain] = {"ts": time.time(), "repos": data}
     _save_cache()
     return jsonify(repos=data, fetched=_cache[domain]["ts"], cached=False)
@@ -166,10 +215,10 @@ def repos():
 
 @app.get("/api/search")
 def search():
-    term = " ".join(request.args.get("q", "").split())[:80]
-    refresh = request.args.get("refresh") == "1"
-    if len(term) < 2:
-        return jsonify(error="Type at least 2 characters to search GitHub"), 400
+    term = " ".join(request.args.get("q", "").split())
+    refresh = request.args.get("refresh") == "1" and not g.get("no_refresh")
+    if not SAFE_TERM.match(term):
+        return jsonify(error="Use 2-80 letters, numbers, spaces or . + # / -"), 400
     key = "search:" + term.lower()
     entry = _cache.get(key)
     if entry and time.time() - entry["ts"] < CACHE_TTL and not refresh:
@@ -181,7 +230,9 @@ def search():
             return jsonify(repos=entry["repos"], fetched=entry["ts"], cached=True, stale=True)
         return jsonify(error=str(e)), 429
     except requests.RequestException as e:
-        return jsonify(error=f"GitHub request failed: {e}"), 502
+        return jsonify(error="GitHub request failed. Try again shortly."), 502
+    while len(_cache) >= MAX_CACHE_ENTRIES:  # evict oldest
+        _cache.pop(min(_cache, key=lambda k: _cache[k]["ts"]))
     _cache[key] = {"ts": time.time(), "repos": data}
     _save_cache()
     return jsonify(repos=data, fetched=_cache[key]["ts"], cached=False)
