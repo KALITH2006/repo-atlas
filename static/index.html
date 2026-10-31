@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repo Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f4;--panel:#fff;--ink:#14202b;--mute:#5d6b78;--line:#d5dce3;--accent:#0f6e8c;--accent-bg:#dcedf3;--star:#b86a00}
+@media (prefers-color-scheme:dark){:root{--bg:#10171d;--panel:#18222b;--ink:#e6edf2;--mute:#8fa0ae;--line:#2b3946;--accent:#5cc0de;--accent-bg:#1b3643;--star:#f0a443}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Public Sans",system-ui,sans-serif}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+aside{border-right:1px solid var(--line);padding:24px 14px;position:sticky;top:0;height:100vh;overflow:auto}
+h1{font:700 24px "Bricolage Grotesque",sans-serif;margin:0 10px 18px;letter-spacing:-.01em}
+.dom{display:block;width:100%;text-align:left;background:none;border:0;color:var(--ink);font:inherit;padding:9px 10px;border-radius:6px;cursor:pointer}
+.dom:hover{background:var(--accent-bg)}
+.dom[aria-current=true]{background:var(--accent);color:#fff;font-weight:600}
+.dom small{display:block;color:inherit;opacity:.65;font-size:12px}
+main{padding:24px 32px;max-width:1000px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:6px}
+.bar h2{font:700 28px "Bricolage Grotesque",sans-serif;margin:0 auto 0 0}
+input,select,button.act{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+input{min-width:200px}
+button.act{cursor:pointer}button.act:hover{border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.meta{color:var(--mute);font-size:13px;margin:0 0 14px}
+.repo{display:grid;grid-template-columns:40px 1fr auto;gap:14px;padding:14px 0;border-top:1px solid var(--line)}
+.repo img{width:40px;height:40px;border-radius:50%;background:var(--line)}
+.repo a.n{font-weight:600;color:var(--accent);text-decoration:none;word-break:break-word}
+.repo a.n:hover{text-decoration:underline}
+.repo p{margin:2px 0 6px;color:var(--ink);max-width:70ch}
+.tags span{display:inline-block;font-size:12px;color:var(--mute);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:0 8px;margin:0 4px 4px 0}
+.stat{text-align:right;font-size:13px;color:var(--mute);white-space:nowrap}
+.stat b{display:block;color:var(--star);font-size:17px}
+.msg{padding:40px 0;color:var(--mute)}
+.err{color:#b3261e}
+@media(max-width:760px){.app{grid-template-columns:1fr}aside{position:static;height:auto;display:flex;overflow-x:auto;padding:10px}.dom{white-space:nowrap;width:auto}.dom small{display:none}main{padding:16px}.repo{grid-template-columns:32px 1fr}.repo img{width:32px;height:32px}.stat{grid-column:2;text-align:left}.stat b{display:inline;margin-right:8px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside><h1>Repo Atlas</h1><nav id="nav" aria-label="Domains"></nav></aside>
+  <main>
+    <div class="bar">
+      <h2 id="title">Loading…</h2>
+      <input id="q" type="search" placeholder="Filter list, or press Enter to search GitHub" aria-label="Filter repos">
+      <select id="lang" aria-label="Language"><option value="">All languages</option></select>
+      <select id="sort" aria-label="Sort by">
+        <option value="stars">Most stars</option><option value="forks">Most forks</option><option value="updated">Recently updated</option>
+      </select>
+      <button class="act" id="gh" title="Search all of GitHub for this topic or framework">Search GitHub</button>
+      <button class="act" id="refresh">Refresh from GitHub</button>
+      <button class="act" id="csv">Export CSV</button>
+    </div>
+    <p class="meta" id="meta"></p>
+    <div id="list"></div>
+  </main>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let domains = [], current = "", data = [], searchTerm = "";
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => n >= 1000 ? (n/1000).toFixed(n >= 10000 ? 0 : 1) + "k" : n;
+
+async function init() {
+  domains = await (await fetch("/api/domains")).json();
+  $("nav").innerHTML = domains.map(d =>
+    `<button class="dom" data-d="${esc(d.name)}">${esc(d.name)}<small>${esc(d.topics.slice(0,3).join(", "))}</small></button>`).join("");
+  $("nav").onclick = e => { const b = e.target.closest(".dom"); if (b) load(b.dataset.d); };
+  load(domains[0].name);
+}
+
+async function load(domain, refresh = false, term = "") {
+  current = domain;
+  searchTerm = term;
+  document.querySelectorAll(".dom").forEach(b => b.setAttribute("aria-current", !term && b.dataset.d === domain));
+  $("title").textContent = term ? `GitHub: ${term}` : domain;
+  $("list").innerHTML = '<div class="msg">Fetching repositories from GitHub…</div>';
+  $("meta").textContent = "";
+  try {
+    const url = term ? `/api/search?q=${encodeURIComponent(term)}` : `/api/repos?domain=${encodeURIComponent(domain)}`;
+    const r = await fetch(url + (refresh ? "&refresh=1" : ""));
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Request failed");
+    data = j.repos;
+    const langs = [...new Set(data.map(x => x.language))].sort();
+    $("lang").innerHTML = '<option value="">All languages</option>' + langs.map(l => `<option>${esc(l)}</option>`).join("");
+    const when = new Date(j.fetched * 1000).toLocaleString();
+    $("meta").textContent = `${data.length} repos · ${j.cached ? "cached" : "fetched"} ${when}${j.stale ? " (rate limited, showing older data)" : ""}`;
+    render();
+  } catch (err) {
+    $("list").innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
+  }
+}
+
+function filtered() {
+  const q = $("q").value.toLowerCase(), l = $("lang").value, s = $("sort").value;
+  return data.filter(r => (!l || r.language === l) && (!q || (r.name + " " + r.description).toLowerCase().includes(q)))
+    .sort((a, b) => s === "updated" ? b.updated.localeCompare(a.updated) : b[s] - a[s]);
+}
+
+function render() {
+  const rows = filtered();
+  $("list").innerHTML = rows.length ? rows.map(r => `
+    <article class="repo">
+      <img src="${esc(r.avatar)}" alt="" loading="lazy">
+      <div>
+        <a class="n" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
+        <p>${esc(r.description) || "No description"}</p>
+        <div class="tags"><span>${esc(r.language)}</span>${r.topics.map(t => `<span>${esc(t)}</span>`).join("")}</div>
+      </div>
+      <div class="stat"><b>★ ${fmt(r.stars)}</b>${fmt(r.forks)} forks<br>pushed ${esc(r.updated)}</div>
+    </article>`).join("") : '<div class="msg">No repos match these filters.</div>';
+}
+
+["q", "lang", "sort"].forEach(id => $(id).addEventListener("input", render));
+const ghSearch = () => { const t = $("q").value.trim(); if (t) { $("q").value = ""; load(current, false, t); } };
+$("gh").onclick = ghSearch;
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") ghSearch(); });
+$("refresh").onclick = () => load(current, true, searchTerm);
+$("csv").onclick = () => {
+  const rows = [["name","url","stars","forks","language","updated","description"],
+    ...filtered().map(r => [r.name, r.url, r.stars, r.forks, r.language, r.updated, r.description])];
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([csv], {type: "text/csv"})), download: `${(searchTerm || current).replace(/\W+/g, "_")}.csv`});
+  a.click();
+};
+init();
+</script>
+</body>
+</html>
